@@ -1,2 +1,5 @@
 /target
-/*.zip
+*.zip
+*.gpx
+*.kml
+*.kmz
