@@ -11,3 +11,4 @@ csv = "1.2.1"
 serde = { version = "1.0.162", features = ["derive"] }
 zip = { version = "0.6.5", default-features = false, features = ["deflate"] }
 gpx_kml_convert = {git = "https://github.com/vilaureu/gpx_kml_convert.git" }
+flate2 = "1.0.26"

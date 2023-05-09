@@ -7,6 +7,7 @@ use std::{
     result,
 };
 use zip::{write::FileOptions, ZipArchive};
+use flate2::read::GzDecoder;
 
 /// Convert a strave export archive to a set of kmz files.
 #[derive(Parser)]
@@ -50,7 +51,8 @@ fn extract_records(zip_file: &mut zip::ZipArchive<File>) -> Vec<Record> {
 }
 
 fn write_kmz(zip_file: &mut zip::ZipArchive<File>, record: &Record) {
-    let mut record_file: zip::read::ZipFile = zip_file.by_name(&record.filename).unwrap();
+    let mut record_file = zip_file.by_name(&record.filename).unwrap();
+    
     let out_file_name = format!("{}.kmz", record.activity_id);
     let path = std::path::Path::new(&out_file_name);
     let file = std::fs::File::create(path).unwrap();
@@ -60,7 +62,13 @@ fn write_kmz(zip_file: &mut zip::ZipArchive<File>, record: &Record) {
         .unix_permissions(0o755);
     zip_writer.start_file("doc.kml", options).unwrap();
 
-    convert(&mut record_file, &mut zip_writer).unwrap();
+    if record.filename.ends_with(".gz") {
+        let mut decoder = GzDecoder::new(record_file);
+        convert(&mut decoder, &mut zip_writer).unwrap();
+    }
+    else {
+        convert(&mut record_file, &mut zip_writer).unwrap();
+    }
 
     println!("{:?}", record);
 
