@@ -4,10 +4,10 @@ use gpx_kml_convert::convert;
 use serde::{Deserialize, Deserializer};
 use std::{
     fs::{self, File},
-    io::{stdout, Read, Write, copy},
+    io::copy,
     result,
 };
-use zip::{write::FileOptions, ZipArchive};
+use zip::write::FileOptions;
 
 /// Convert a strave export archive to a set of kmz files.
 #[derive(Parser)]
@@ -50,38 +50,55 @@ fn extract_records(zip_file: &mut zip::ZipArchive<File>) -> Vec<Record> {
     rdr.deserialize().map(|x| x.unwrap()).collect()
 }
 
-fn write_kmz(zip_file: &mut zip::ZipArchive<File>, record: &Record) {
-    let kmz_file_name = format!("{}.kmz", record.activity_id);
-    let kmz_path = std::path::Path::new(&kmz_file_name);
-    let kmz_file = std::fs::File::create(kmz_path).unwrap();
-    let mut kmz_writer = zip::ZipWriter::new(kmz_file);
-    let zip_options = FileOptions::default()
-        .compression_method(zip::CompressionMethod::Stored)
-        .unix_permissions(0o755);
+struct Kmz<'a> {
+    kmz_writer: zip::ZipWriter<File>,
+    zip_file: &'a mut zip::ZipArchive<File>,
+}
 
-    {
-        let mut track_file: zip::read::ZipFile = zip_file.by_name(&record.filename).unwrap();
-        kmz_writer.start_file("doc.kml", zip_options).unwrap();
+impl<'a> Kmz<'a> {
+    fn new(kmz_file_name: &str, zip_file: &'a mut zip::ZipArchive<File>) -> Kmz<'a> {
+        let kmz_path = std::path::Path::new(kmz_file_name);
+        let kmz_file = std::fs::File::create(kmz_path).unwrap();
+        let kmz_writer = zip::ZipWriter::new(kmz_file);
+        Kmz {
+            kmz_writer,
+            zip_file,
+        }
+    }
+
+    fn write_track(&mut self, record: &Record) {
+        let mut track_file: zip::read::ZipFile = self.zip_file.by_name(&record.filename).unwrap();
+        self.kmz_writer
+            .start_file("doc.kml", Kmz::default_file_options())
+            .unwrap();
 
         if record.filename.ends_with(".gz") {
             let mut gz_decoder = GzDecoder::new(track_file);
-            convert(&mut gz_decoder, &mut kmz_writer).unwrap();
+            convert(&mut gz_decoder, &mut self.kmz_writer).unwrap();
         } else {
-            convert(&mut track_file, &mut kmz_writer).unwrap();
+            convert(&mut track_file, &mut self.kmz_writer).unwrap();
         }
     }
 
-    {
+    fn write_medias(&mut self, record: &Record) {
         for media_file_name in &record.medias {
-            kmz_writer.start_file(media_file_name, zip_options).unwrap();
-            let mut media_file = zip_file.by_name(&media_file_name).unwrap();
-            copy(&mut media_file, &mut kmz_writer).unwrap();
+            self.kmz_writer
+                .start_file(media_file_name, Kmz::default_file_options())
+                .unwrap();
+            let mut media_file = self.zip_file.by_name(media_file_name).unwrap();
+            copy(&mut media_file, &mut self.kmz_writer).unwrap();
         }
     }
 
-    kmz_writer.finish().unwrap();
+    fn finish(&mut self) {
+        self.kmz_writer.finish().unwrap();
+    }
 
-    println!("{:?}", record);
+    fn default_file_options() -> FileOptions {
+        FileOptions::default()
+            .compression_method(zip::CompressionMethod::Stored)
+            .unix_permissions(0o755)
+    }
 }
 
 fn main() {
@@ -91,8 +108,17 @@ fn main() {
     let mut archive = zip::ZipArchive::new(file).unwrap();
 
     let records = extract_records(&mut archive);
-    records
-        .into_iter()
-        .map(|x| write_kmz(&mut archive, &x))
-        .for_each(drop);
+
+    for record in records {
+        let kmz_file_name = format!("{}.kmz", &record.activity_id);
+        let mut kmz = Kmz::new(&kmz_file_name, &mut archive);
+        kmz.write_track(&record);
+        kmz.write_medias(&record);
+        kmz.finish();
+    }
+
+    // records
+    //     .into_iter()
+    //     .map(|x: Record| {Kmz::new(&x.activity_id, &mut archive); })
+    //     .for_each(drop);
 }
