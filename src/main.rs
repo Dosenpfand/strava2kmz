@@ -1,6 +1,7 @@
 use clap::Parser;
 use flate2::read::GzDecoder;
 use gpx_kml_convert::convert;
+use kml::types::Icon;
 use serde::{Deserialize, Deserializer};
 use std::{
     fs::{self, File},
@@ -94,6 +95,13 @@ impl<'a> Kmz<'a> {
         self.kmz_writer.finish().unwrap();
     }
 
+    fn convert(kmz_file_name: &str, zip_file: &'a mut zip::ZipArchive<File>, record: &Record) {
+        let mut kmz = Kmz::new(&kmz_file_name, zip_file);
+        kmz.write_track(&record);
+        kmz.write_medias(&record);
+        kmz.finish();
+    }
+
     fn default_file_options() -> FileOptions {
         FileOptions::default()
             .compression_method(zip::CompressionMethod::Stored)
@@ -109,16 +117,8 @@ fn main() {
 
     let records = extract_records(&mut archive);
 
-    for record in records {
-        let kmz_file_name = format!("{}.kmz", &record.activity_id);
-        let mut kmz = Kmz::new(&kmz_file_name, &mut archive);
-        kmz.write_track(&record);
-        kmz.write_medias(&record);
-        kmz.finish();
-    }
-
-    // records
-    //     .into_iter()
-    //     .map(|x: Record| {Kmz::new(&x.activity_id, &mut archive); })
-    //     .for_each(drop);
+    records
+        .into_iter()
+        .map(|x: Record| Kmz::convert(&format!("{}.kmz", &x.activity_id), &mut archive, &x))
+        .for_each(drop);
 }
