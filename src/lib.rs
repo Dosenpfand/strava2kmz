@@ -6,6 +6,10 @@ use serde::{Deserialize, Deserializer};
 use std::{fs::File, io::copy, result};
 use zip::write::FileOptions;
 
+const ACTIVITIES_FILE_NAME: &str = "activities.csv";
+const KML_FILE_NAME: &str = "doc.kml";
+const GZIP_FILE_EXTENSION: &str = ".gz";
+
 #[derive(Debug, Deserialize)]
 pub struct Record {
     // TODO: string slices?
@@ -39,7 +43,7 @@ impl Record {
 }
 
 pub fn extract_records(zip_file: &mut zip::ZipArchive<File>) -> Result<Vec<Record>> {
-    let activities_file = zip_file.by_name("activities.csv")?;
+    let activities_file = zip_file.by_name(ACTIVITIES_FILE_NAME)?;
     let mut rdr = csv::Reader::from_reader(activities_file);
     let records = rdr.deserialize().map(|x| x.unwrap()).collect();
     Ok(records)
@@ -64,9 +68,9 @@ impl<'a> Kmz<'a> {
     pub fn write_track(&mut self, record: &Record) -> Result<()> {
         let mut track_file: zip::read::ZipFile = self.zip_file.by_name(&record.filename)?;
         self.kmz_writer
-            .start_file("doc.kml", Kmz::default_file_options())?;
+            .start_file(KML_FILE_NAME, Kmz::default_file_options())?;
 
-        if record.filename.ends_with(".gz") {
+        if record.filename.ends_with(GZIP_FILE_EXTENSION) {
             let mut gz_decoder = GzDecoder::new(track_file);
             convert(&mut gz_decoder, &mut self.kmz_writer)?;
         } else {
@@ -95,11 +99,11 @@ impl<'a> Kmz<'a> {
         zip_file: &'a mut zip::ZipArchive<File>,
         record: &Record,
     ) -> Result<()> {
-        let mut kmz = Kmz::new(&kmz_file_name, zip_file)
+        let mut kmz = Kmz::new(kmz_file_name, zip_file)
             .with_context(|| format!("Could not create kmz for {}", kmz_file_name))?;
-        kmz.write_track(&record)
+        kmz.write_track(record)
             .with_context(|| format!("Could not write track for {}", kmz_file_name))?;
-        kmz.write_medias(&record)
+        kmz.write_medias(record)
             .with_context(|| format!("Could not write media for {}", kmz_file_name))?;
         kmz.finish()
             .with_context(|| format!("Could not finish for {}", kmz_file_name))?;
