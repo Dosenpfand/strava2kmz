@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use indicatif::ProgressIterator;
 use std::{fs, path::PathBuf};
-use strava2kmz::{extract_records, Kmz, Record};
+use strava2kmz::{Kmz, Record};
 
 /// Convert a strave export archive to a set of kmz files.
 #[derive(Parser)]
@@ -24,8 +24,13 @@ fn main() -> Result<()> {
     let mut archive = zip::ZipArchive::new(file)
         .with_context(|| format!("Could not read {}", in_file.display()))?;
 
-    let records = extract_records(&mut archive)
+    let mut activities_file = archive
+        .by_name("activities.csv")
+        .with_context(|| format!("Could not find activities.csv in {}", in_file.display()))?;
+
+    let records = Record::extract_records(&mut activities_file)
         .with_context(|| format!("Could not extract all records from {}", in_file.display()))?;
+    drop(activities_file);
 
     records
         .into_iter()

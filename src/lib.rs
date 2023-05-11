@@ -3,10 +3,13 @@ use anyhow::{Context, Result};
 use flate2::read::GzDecoder;
 use gpx_kml_convert::convert;
 use serde::{Deserialize, Deserializer};
-use std::{fs::File, io::copy, result};
+use std::{
+    fs::File,
+    io::{copy, Read},
+    result,
+};
 use zip::write::FileOptions;
 
-const ACTIVITIES_FILE_NAME: &str = "activities.csv";
 const KML_FILE_NAME: &str = "doc.kml";
 const GZIP_FILE_EXTENSION: &str = ".gz";
 
@@ -40,13 +43,66 @@ impl Record {
     pub fn activity_id(&self) -> &str {
         self.activity_id.as_ref()
     }
+
+    pub fn extract_records<R: Read>(activities_file: R) -> Result<Vec<Record>> {
+        let mut rdr = csv::Reader::from_reader(activities_file);
+        let records: Result<Vec<Record>, csv::Error> = rdr.deserialize().collect();
+        Ok(records?)
+    }
 }
 
-pub fn extract_records(zip_file: &mut zip::ZipArchive<File>) -> Result<Vec<Record>> {
-    let activities_file = zip_file.by_name(ACTIVITIES_FILE_NAME)?;
-    let mut rdr = csv::Reader::from_reader(activities_file);
-    let records: Result<Vec<Record>, csv::Error> = rdr.deserialize().collect();
-    Ok(records?)
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_single_record_single_media() {
+        let csv = "Activity ID,Filename,Media\n\
+                         123,activities/123.gpx,media/456.jpg";
+        let records = Record::extract_records(&mut csv.as_bytes()).unwrap();
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].activity_id, "123");
+        assert_eq!(records[0].filename, "activities/123.gpx");
+        assert_eq!(records[0].medias, vec!["media/456.jpg"]);
+    }
+    #[test]
+    fn test_single_record_no_media() {
+        let csv = "Activity ID,Filename,Media\n\
+                         123,activities/123.gpx,";
+        let records = Record::extract_records(&mut csv.as_bytes()).unwrap();
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].activity_id, "123");
+        assert_eq!(records[0].filename, "activities/123.gpx");
+        assert_eq!(records[0].medias, Vec::<String>::new());
+    }
+    #[test]
+    fn test_single_record_multiple_media() {
+        let csv = "Activity ID,Filename,Media\n\
+                         123,activities/123.gpx,media/456.jpg|media/789.jpg";
+        let records = Record::extract_records(&mut csv.as_bytes()).unwrap();
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].activity_id, "123");
+        assert_eq!(records[0].filename, "activities/123.gpx");
+        assert_eq!(records[0].medias, vec!["media/456.jpg", "media/789.jpg"]);
+    }
+    #[test]
+    fn test_multiple_record() {
+        let csv = "Activity ID,Filename,Media\n\
+                         123,activities/123.gpx,media/456.jpg\n\
+                         123,activities/123.gpx,media/456.jpg\n\
+                         123,activities/123.gpx,media/456.jpg";
+        let records = Record::extract_records(&mut csv.as_bytes()).unwrap();
+        assert_eq!(records.len(), 3);
+        assert_eq!(records[0].activity_id, "123");
+        assert_eq!(records[0].filename, "activities/123.gpx");
+        assert_eq!(records[0].medias, vec!["media/456.jpg"]);
+        assert_eq!(records[1].activity_id, "123");
+        assert_eq!(records[1].filename, "activities/123.gpx");
+        assert_eq!(records[1].medias, vec!["media/456.jpg"]);
+        assert_eq!(records[2].activity_id, "123");
+        assert_eq!(records[2].filename, "activities/123.gpx");
+        assert_eq!(records[2].medias, vec!["media/456.jpg"]);
+    }
 }
 
 pub struct Kmz<'a> {
