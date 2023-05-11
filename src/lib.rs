@@ -45,8 +45,8 @@ impl Record {
 pub fn extract_records(zip_file: &mut zip::ZipArchive<File>) -> Result<Vec<Record>> {
     let activities_file = zip_file.by_name(ACTIVITIES_FILE_NAME)?;
     let mut rdr = csv::Reader::from_reader(activities_file);
-    let records = rdr.deserialize().map(|x| x.unwrap()).collect();
-    Ok(records)
+    let records: Result<Vec<Record>, csv::Error> = rdr.deserialize().collect();
+    Ok(records?)
 }
 
 pub struct Kmz<'a> {
