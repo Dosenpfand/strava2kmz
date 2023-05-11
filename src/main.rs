@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use clap::Parser;
+use indicatif::ProgressIterator;
 use std::{fs, path::PathBuf};
 use strava2kmz::{extract_records, Kmz, Record};
 
@@ -28,6 +29,7 @@ fn main() -> Result<()> {
 
     records
         .into_iter()
+        .progress()
         .try_for_each(|x: Record| {
             let mut out_path = out_dir.clone();
             out_path.push(x.activity_id());
