@@ -8,12 +8,12 @@ pub struct Activity {
     #[serde(rename(deserialize = "Activity ID"))]
     activity_id: String,
     #[serde(rename(deserialize = "Filename"))]
-    pub filename: String,
+    filename: String,
     #[serde(
         rename(deserialize = "Media"),
         deserialize_with = "Activity::deserialize_media"
     )]
-    pub medias: Vec<String>,
+    medias: Vec<String>,
 }
 
 impl Activity {
@@ -29,14 +29,22 @@ impl Activity {
             .collect())
     }
 
-    pub fn activity_id(&self) -> &str {
-        self.activity_id.as_ref()
-    }
-
     pub fn extract_records<R: Read>(activities_file: R) -> Result<Vec<Activity>> {
         let mut rdr = csv::Reader::from_reader(activities_file);
         let records: Result<Vec<Activity>, csv::Error> = rdr.deserialize().collect();
         Ok(records?)
+    }
+
+    pub fn activity_id(&self) -> &str {
+        self.activity_id.as_ref()
+    }
+
+    pub fn filename(&self) -> &str {
+        self.filename.as_ref()
+    }
+
+    pub fn medias(&self) -> &[String] {
+        self.medias.as_ref()
     }
 }
 

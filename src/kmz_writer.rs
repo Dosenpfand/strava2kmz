@@ -31,11 +31,11 @@ impl<'a> KmzConverter<'a> {
     }
 
     pub fn write_track(&mut self, record: &Activity) -> Result<()> {
-        let mut track_file: zip::read::ZipFile = self.zip_file.by_name(&record.filename)?;
+        let mut track_file: zip::read::ZipFile = self.zip_file.by_name(record.filename())?;
         self.kmz_writer
             .start_file(KML_FILE_NAME, KmzConverter::default_file_options())?;
 
-        if record.filename.ends_with(GZIP_FILE_EXTENSION) {
+        if record.filename().ends_with(GZIP_FILE_EXTENSION) {
             let mut gz_decoder = GzDecoder::new(track_file);
             convert(&mut gz_decoder, &mut self.kmz_writer)?;
         } else {
@@ -45,7 +45,7 @@ impl<'a> KmzConverter<'a> {
     }
 
     pub fn write_medias(&mut self, record: &Activity) -> Result<()> {
-        for media_file_name in &record.medias {
+        for media_file_name in record.medias() {
             self.kmz_writer
                 .start_file(media_file_name, KmzConverter::default_file_options())?;
             let mut media_file = self.zip_file.by_name(media_file_name)?;
