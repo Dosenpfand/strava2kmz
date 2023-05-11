@@ -14,7 +14,7 @@ const KML_FILE_NAME: &str = "doc.kml";
 const GZIP_FILE_EXTENSION: &str = ".gz";
 
 #[derive(Debug, Deserialize)]
-pub struct Record {
+pub struct Activity {
     // TODO: string slices?
     #[serde(rename(deserialize = "Activity ID"))]
     activity_id: String,
@@ -22,12 +22,12 @@ pub struct Record {
     filename: String,
     #[serde(
         rename(deserialize = "Media"),
-        deserialize_with = "Record::deserialize_media"
+        deserialize_with = "Activity::deserialize_media"
     )]
     medias: Vec<String>,
 }
 
-impl Record {
+impl Activity {
     fn deserialize_media<'de, D>(deserializer: D) -> result::Result<Vec<String>, D::Error>
     where
         D: Deserializer<'de>,
@@ -44,9 +44,9 @@ impl Record {
         self.activity_id.as_ref()
     }
 
-    pub fn extract_records<R: Read>(activities_file: R) -> Result<Vec<Record>> {
+    pub fn extract_records<R: Read>(activities_file: R) -> Result<Vec<Activity>> {
         let mut rdr = csv::Reader::from_reader(activities_file);
-        let records: Result<Vec<Record>, csv::Error> = rdr.deserialize().collect();
+        let records: Result<Vec<Activity>, csv::Error> = rdr.deserialize().collect();
         Ok(records?)
     }
 }
@@ -59,7 +59,7 @@ mod tests {
     fn test_single_record_single_media() {
         let csv = "Activity ID,Filename,Media\n\
                          123,activities/123.gpx,media/456.jpg";
-        let records = Record::extract_records(&mut csv.as_bytes()).unwrap();
+        let records = Activity::extract_records(&mut csv.as_bytes()).unwrap();
         assert_eq!(records.len(), 1);
         assert_eq!(records[0].activity_id, "123");
         assert_eq!(records[0].filename, "activities/123.gpx");
@@ -69,7 +69,7 @@ mod tests {
     fn test_single_record_no_media() {
         let csv = "Activity ID,Filename,Media\n\
                          123,activities/123.gpx,";
-        let records = Record::extract_records(&mut csv.as_bytes()).unwrap();
+        let records = Activity::extract_records(&mut csv.as_bytes()).unwrap();
         assert_eq!(records.len(), 1);
         assert_eq!(records[0].activity_id, "123");
         assert_eq!(records[0].filename, "activities/123.gpx");
@@ -79,7 +79,7 @@ mod tests {
     fn test_single_record_multiple_media() {
         let csv = "Activity ID,Filename,Media\n\
                          123,activities/123.gpx,media/456.jpg|media/789.jpg";
-        let records = Record::extract_records(&mut csv.as_bytes()).unwrap();
+        let records = Activity::extract_records(&mut csv.as_bytes()).unwrap();
         assert_eq!(records.len(), 1);
         assert_eq!(records[0].activity_id, "123");
         assert_eq!(records[0].filename, "activities/123.gpx");
@@ -91,7 +91,7 @@ mod tests {
                          123,activities/123.gpx,media/456.jpg\n\
                          123,activities/123.gpx,media/456.jpg\n\
                          123,activities/123.gpx,media/456.jpg";
-        let records = Record::extract_records(&mut csv.as_bytes()).unwrap();
+        let records = Activity::extract_records(&mut csv.as_bytes()).unwrap();
         assert_eq!(records.len(), 3);
         assert_eq!(records[0].activity_id, "123");
         assert_eq!(records[0].filename, "activities/123.gpx");
@@ -105,26 +105,29 @@ mod tests {
     }
 }
 
-pub struct Kmz<'a> {
+pub struct KmzConverter<'a> {
     kmz_writer: zip::ZipWriter<File>,
     zip_file: &'a mut zip::ZipArchive<File>,
 }
 
-impl<'a> Kmz<'a> {
-    pub fn new(kmz_file_name: &str, zip_file: &'a mut zip::ZipArchive<File>) -> Result<Kmz<'a>> {
+impl<'a> KmzConverter<'a> {
+    pub fn new(
+        kmz_file_name: &str,
+        zip_file: &'a mut zip::ZipArchive<File>,
+    ) -> Result<KmzConverter<'a>> {
         let kmz_path = std::path::Path::new(kmz_file_name);
         let kmz_file = std::fs::File::create(kmz_path)?;
         let kmz_writer = zip::ZipWriter::new(kmz_file);
-        Ok(Kmz {
+        Ok(KmzConverter {
             kmz_writer,
             zip_file,
         })
     }
 
-    pub fn write_track(&mut self, record: &Record) -> Result<()> {
+    pub fn write_track(&mut self, record: &Activity) -> Result<()> {
         let mut track_file: zip::read::ZipFile = self.zip_file.by_name(&record.filename)?;
         self.kmz_writer
-            .start_file(KML_FILE_NAME, Kmz::default_file_options())?;
+            .start_file(KML_FILE_NAME, KmzConverter::default_file_options())?;
 
         if record.filename.ends_with(GZIP_FILE_EXTENSION) {
             let mut gz_decoder = GzDecoder::new(track_file);
@@ -135,10 +138,10 @@ impl<'a> Kmz<'a> {
         Ok(())
     }
 
-    pub fn write_medias(&mut self, record: &Record) -> Result<()> {
+    pub fn write_medias(&mut self, record: &Activity) -> Result<()> {
         for media_file_name in &record.medias {
             self.kmz_writer
-                .start_file(media_file_name, Kmz::default_file_options())?;
+                .start_file(media_file_name, KmzConverter::default_file_options())?;
             let mut media_file = self.zip_file.by_name(media_file_name)?;
             copy(&mut media_file, &mut self.kmz_writer)?;
         }
@@ -153,9 +156,9 @@ impl<'a> Kmz<'a> {
     pub fn convert(
         kmz_file_name: &str,
         zip_file: &'a mut zip::ZipArchive<File>,
-        record: &Record,
+        record: &Activity,
     ) -> Result<()> {
-        let mut kmz = Kmz::new(kmz_file_name, zip_file)
+        let mut kmz = KmzConverter::new(kmz_file_name, zip_file)
             .with_context(|| format!("Could not create kmz for {}", kmz_file_name))?;
         kmz.write_track(record)
             .with_context(|| format!("Could not write track for {}", kmz_file_name))?;
