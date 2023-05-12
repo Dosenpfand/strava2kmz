@@ -3,7 +3,10 @@ use anyhow::{Context, Result};
 use flate2::read::GzDecoder;
 use gpx_kml_convert::convert;
 
-use std::{fs::File, io::copy};
+use std::{
+    fs::File,
+    io::{copy, Read, Seek},
+};
 use zip::write::FileOptions;
 
 use crate::Activity;
@@ -11,16 +14,16 @@ use crate::Activity;
 const KML_FILE_NAME: &str = "doc.kml";
 const GZIP_FILE_EXTENSION: &str = ".gz";
 
-pub struct KmzConverter<'a> {
+pub struct KmzConverter<'a, R: Read + Seek> {
     kmz_writer: zip::ZipWriter<File>,
-    zip_file: &'a mut zip::ZipArchive<File>,
+    zip_file: &'a mut zip::ZipArchive<R>,
 }
 
-impl<'a> KmzConverter<'a> {
+impl<'a, R: Read + Seek> KmzConverter<'a, R> {
     pub fn new(
         kmz_file_name: &str,
-        zip_file: &'a mut zip::ZipArchive<File>,
-    ) -> Result<KmzConverter<'a>> {
+        zip_file: &'a mut zip::ZipArchive<R>,
+    ) -> Result<KmzConverter<'a, R>> {
         let kmz_path = std::path::Path::new(kmz_file_name);
         let kmz_file = std::fs::File::create(kmz_path)?;
         let kmz_writer = zip::ZipWriter::new(kmz_file);
@@ -33,7 +36,7 @@ impl<'a> KmzConverter<'a> {
     pub fn write_track(&mut self, record: &Activity) -> Result<()> {
         let mut track_file: zip::read::ZipFile = self.zip_file.by_name(record.filename())?;
         self.kmz_writer
-            .start_file(KML_FILE_NAME, KmzConverter::default_file_options())?;
+            .start_file(KML_FILE_NAME, default_file_options())?;
 
         if record.filename().ends_with(GZIP_FILE_EXTENSION) {
             let mut gz_decoder = GzDecoder::new(track_file);
@@ -47,7 +50,7 @@ impl<'a> KmzConverter<'a> {
     pub fn write_medias(&mut self, record: &Activity) -> Result<()> {
         for media_file_name in record.medias() {
             self.kmz_writer
-                .start_file(media_file_name, KmzConverter::default_file_options())?;
+                .start_file(media_file_name, default_file_options())?;
             let mut media_file = self.zip_file.by_name(media_file_name)?;
             copy(&mut media_file, &mut self.kmz_writer)?;
         }
@@ -74,10 +77,10 @@ impl<'a> KmzConverter<'a> {
             .with_context(|| format!("Could not finish for {}", kmz_file_name))?;
         Ok(())
     }
+}
 
-    fn default_file_options() -> FileOptions {
-        FileOptions::default()
-            .compression_method(zip::CompressionMethod::Stored)
-            .unix_permissions(0o755)
-    }
+fn default_file_options() -> FileOptions {
+    FileOptions::default()
+        .compression_method(zip::CompressionMethod::Stored)
+        .unix_permissions(0o755)
 }

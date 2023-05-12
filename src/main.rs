@@ -1,7 +1,10 @@
 use anyhow::{Context, Result};
 use clap::Parser;
 use indicatif::ProgressIterator;
-use std::{fs, path::PathBuf};
+use std::{
+    fs::{self, File},
+    path::PathBuf,
+};
 use strava2kmz::{Activity, KmzConverter};
 
 /// Convert a strave export archive to a set of kmz files.
@@ -39,7 +42,7 @@ fn main() -> Result<()> {
             let mut out_path = out_dir.clone();
             out_path.push(x.activity_id());
             out_path.set_extension("kmz");
-            KmzConverter::convert(&out_path.to_string_lossy(), &mut archive, &x)
+            KmzConverter::<File>::convert(&out_path.to_string_lossy(), &mut archive, &x)
         })
         .context("Could not convert to kmz")
 }

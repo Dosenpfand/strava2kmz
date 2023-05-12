@@ -4,5 +4,6 @@
 - [ ] Integration test
 - [ ] Unit test
 - [ ] CD
+- [ ] Coverage for CI
 - [ ] web/wasm version
 - [ ] Documentation (and generation)
