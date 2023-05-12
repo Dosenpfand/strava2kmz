@@ -14,9 +14,12 @@ struct Cli {
     in_file: PathBuf,
     /// The directory where the output is written
     out_dir: Option<PathBuf>,
+    #[clap(flatten)]
+    verbose: clap_verbosity_flag::Verbosity,
 }
 
 fn main() -> Result<()> {
+    env_logger::init();
     let args = Cli::parse();
     let in_file = &args.in_file;
     let out_dir = &args.out_dir.unwrap_or_else(PathBuf::new);
