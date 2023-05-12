@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use clap::Parser;
-use indicatif::ProgressIterator;
+use indicatif::ProgressBar;
 use std::{
     fs::{self, File},
     path::PathBuf,
@@ -14,12 +14,14 @@ struct Cli {
     in_file: PathBuf,
     /// The directory where the output is written
     out_dir: Option<PathBuf>,
-    #[clap(flatten)]
-    verbose: clap_verbosity_flag::Verbosity,
 }
 
 fn main() -> Result<()> {
-    env_logger::init();
+    let logger = flexi_logger::Logger::try_with_env_or_str("info")
+        .unwrap()
+        .write_mode(flexi_logger::WriteMode::BufferDontFlush)
+        .start()
+        .unwrap();
     let args = Cli::parse();
     let in_file = &args.in_file;
     let out_dir = &args.out_dir.unwrap_or_else(PathBuf::new);
@@ -38,13 +40,16 @@ fn main() -> Result<()> {
         .with_context(|| format!("Could not extract all records from {}", in_file.display()))?;
     drop(activities_file);
 
+    let progress_bar = ProgressBar::new(records.len().try_into()?);
+
     records
         .into_iter()
-        .progress()
         .try_for_each(|x: Activity| {
+            progress_bar.suspend(|| logger.flush());
             let mut out_path = out_dir.clone();
             out_path.push(x.activity_id());
             out_path.set_extension("kmz");
+            progress_bar.inc(1);
             KmzConverter::<File>::convert(&out_path.to_string_lossy(), &mut archive, &x)
         })
         .context("Could not convert to kmz")
