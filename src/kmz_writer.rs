@@ -3,7 +3,7 @@ use anyhow::{Context, Result};
 use flate2::read::GzDecoder;
 use gpx_kml_convert::convert;
 
-use log::error;
+use log::warn;
 use std::{
     fs::File,
     io::{copy, Read, Seek},
@@ -58,7 +58,7 @@ impl<'a, R: Read + Seek> KmzConverter<'a, R> {
                     copy(&mut media_file, &mut self.kmz_writer)?;
                 }
                 Err(_) => {
-                    error!(
+                    warn!(
                         "Could not find referenced media file '{}' in archive.",
                         media_file_name
                     );
