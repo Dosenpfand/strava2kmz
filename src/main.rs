@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use clap::Parser;
+use clap_verbosity_flag::Verbosity;
 use indicatif::ProgressBar;
 use std::{
     fs::{self, File},
@@ -14,15 +15,18 @@ struct Cli {
     in_file: PathBuf,
     /// The directory where the output is written
     out_dir: Option<PathBuf>,
+    #[command(flatten)]
+    verbose: Verbosity,
 }
 
 fn main() -> Result<()> {
-    let logger = flexi_logger::Logger::try_with_env_or_str("info")
+    let args = Cli::parse();
+    let level = &args.verbose.log_level_filter();
+    let logger = flexi_logger::Logger::try_with_env_or_str(level.as_str())
         .unwrap()
         .write_mode(flexi_logger::WriteMode::BufferDontFlush)
         .start()
         .unwrap();
-    let args = Cli::parse();
     let in_file = &args.in_file;
     let out_dir = &args.out_dir.unwrap_or_else(PathBuf::new);
 

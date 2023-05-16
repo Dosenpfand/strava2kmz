@@ -16,6 +16,7 @@ anyhow = "1.0.71"
 indicatif = "0.17.3"
 log = "0.4.17"
 flexi_logger = "0.25.4"
+clap-verbosity-flag = "2.0.1"
 
 [dev-dependencies]
 assert_cmd = "2.0.11"
